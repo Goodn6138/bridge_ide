@@ -78,11 +78,12 @@ async def submit_code(
     Raises:
         Exception: If API call fails
     """
-    headers = {
-        "x-rapidapi-key": settings.JUDGE0_API_KEY,
-        "x-rapidapi-host": settings.JUDGE0_API_HOST,
-        "Content-Type": "application/json"
-    }
+    headers = {"Content-Type": "application/json"}
+    
+    # Add RapidAPI headers only if API key is provided
+    if settings.JUDGE0_API_KEY and settings.JUDGE0_API_HOST:
+        headers["x-rapidapi-key"] = settings.JUDGE0_API_KEY
+        headers["x-rapidapi-host"] = settings.JUDGE0_API_HOST
     
     params = {"wait": "true" if wait else "false"}
     

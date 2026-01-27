@@ -12,9 +12,9 @@ class Settings(BaseSettings):
     GITHUB_REDIRECT_URI: str = "http://localhost:8000/api/auth/github/callback"
     
     # Judge0
-    JUDGE0_API_URL: str = "https://judge0-ce.p.rapidapi.com"
-    JUDGE0_API_HOST: str = "judge0-ce.p.rapidapi.com"
-    JUDGE0_API_KEY: str
+    JUDGE0_API_URL: str = "https://ce.judge0.com"
+    JUDGE0_API_HOST: Optional[str] = None
+    JUDGE0_API_KEY: Optional[str] = None
     
     # App
     APP_ENV: str = "development"
