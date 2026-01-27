@@ -9,3 +9,4 @@ rad.json
 *.flf
 TestResults.xml
 *.md
+venv
