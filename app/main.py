@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.core.config import get_settings
-from app.api import auth_router, code_router
+from app.api import auth_router, code_router, agent_routes
 
 # Configure logging
 logging.basicConfig(
@@ -34,6 +34,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(code_router, prefix=settings.API_V1_STR)
+app.include_router(agent_routes.router, prefix=settings.API_V1_STR, tags=["agents"])
 
 
 @app.get("/")
