@@ -11,3 +11,5 @@ TestResults.xml
 *.md
 venv
 .venv
+.env
+.env.example
