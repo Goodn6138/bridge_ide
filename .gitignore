@@ -10,3 +10,4 @@ rad.json
 TestResults.xml
 *.md
 venv
+.venv
