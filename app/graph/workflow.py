@@ -54,14 +54,14 @@ def define_graph():
         if user_level == "beginner" or complexity == "complex":
             return "research"
         else:
-            return "code_generator"
+            return "design"
             
     workflow.add_conditional_edges(
         "classifier",
         route_classifier,
         {
             "research": "research",
-            "code_generator": "code_generator"
+            "design": "design"
         }
     )
     

@@ -1,5 +1,12 @@
 import asyncio
 import json
+import sys
+import os
+
+# Set stdout/stderr to UTF-8
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+
 from app.graph.workflow import define_graph
 from app.core.config import get_settings
 
@@ -12,7 +19,7 @@ async def main():
     print("--- Starting Verification ---")
     
     # Test Prompt
-    prompt = "Create a simple React counter component with increment and decrement buttons."
+    prompt = "Create a modern landing page for a coffee shop with a hero section, a menu grid, and a contact form. Use a dark theme with orange accents."
     print(f"Prompt: {prompt}")
     
     initial_state = {
@@ -26,9 +33,10 @@ async def main():
     
     graph = define_graph()
     
-    async for event in graph.astream(initial_state):
-        for key, value in event.items():
-            print(f"\n[Node Completed]: {key}")
+    try:
+        async for event in graph.astream(initial_state):
+            for key, value in event.items():
+                print(f"\n[Node Completed]: {key}")
             
             if key == "classifier":
                 print(f"Classification: {json.dumps(value.get('classification'), indent=2)}")
@@ -97,6 +105,10 @@ async def main():
                         print(f"  {i}. {insight[:80]}...")
                 else:
                     print("Research: Skipped (not required)")
+    except Exception as e:
+        import traceback
+        print("\n❌ CRITICAL ERROR IN GRAPH EXECUTION:")
+        traceback.print_exc()
 
     print("\n" + "="*80)
     print("✅ Verification Complete!")
