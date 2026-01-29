@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: bridge-ide
+Version: 1.0.0
+Summary: FastAPI backend for Bridge IDE with GitHub OAuth and Judge0 code execution
+Author: Bridge IDE Team
+License: MIT
+Keywords: fastapi,github-oauth,judge0,code-execution
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: uvicorn>=0.33.0
+Dynamic: license-file
+
+# bridge_ide
+Custom DRF plugin server, to bridge IDEs with Judge0 execution functionality in a minute. 

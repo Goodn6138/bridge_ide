@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     JUDGE0_API_URL: str = "https://ce.judge0.com"
     JUDGE0_API_HOST: Optional[str] = None
     JUDGE0_API_KEY: Optional[str] = None
+
+    # AI Agents
+    GROQ_API_KEY: Optional[str] = None
+    TAVILY_API_KEY: Optional[str] = None
     
     # App
     APP_ENV: str = "development"
