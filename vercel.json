@@ -1,16 +1,14 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.py": {
+    "app/**/*.py": {
       "runtime": "python3.11"
     }
   },
   "builds": [
     {
       "src": "app/main.py",
-      "env": {
-        "NODE_VERSION": "18.x"
-      },
+      "NODE_VERSION": "18.x",
       "use": "@vercel/python"
     }
   ],
