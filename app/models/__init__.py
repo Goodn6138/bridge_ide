@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 
@@ -45,3 +45,62 @@ class AuthResponse(BaseModel):
     user: Optional[GithubUser] = None
     token: Optional[str] = None
     error: Optional[str] = None
+
+
+class GenerateRequest(BaseModel):
+    """Request to generate a new project from prompt"""
+    prompt: str
+    user_id: str
+
+
+class RefineRequest(BaseModel):
+    """Request to refine an existing project"""
+    project_id: str
+    feedback: str
+    user_id: str
+
+
+class ExecuteRequest(BaseModel):
+    """Request to execute a project"""
+    project_id: str
+    files: Optional[Dict[str, str]] = None
+
+
+class ConversationMessage(BaseModel):
+    """Single message in conversation history"""
+    role: str  # "user" or "assistant"
+    content: str
+
+
+class ProjectState(BaseModel):
+    """Complete state of a project"""
+    project_id: Optional[str] = None
+    user_id: str
+    original_prompt: str
+    iteration_count: int = 0
+    conversation_history: List[ConversationMessage] = []
+    current_files: Dict[str, str] = {}
+    user_feedback: Optional[str] = None
+    status: str = "generating"  # "generating", "completed", "error"
+
+
+class SSEInitEvent(BaseModel):
+    """SSE init event data"""
+    project_id: str
+
+
+class SSEProgressEvent(BaseModel):
+    """SSE progress event data"""
+    node: str
+    message: str
+
+
+class SSEFilesEvent(BaseModel):
+    """SSE files event data"""
+    files: Dict[str, str]
+
+
+class SSECompleteEvent(BaseModel):
+    """SSE complete event data"""
+    project_id: str
+    files: Dict[str, str]

@@ -16,7 +16,7 @@ settings = get_settings()
 # Create FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    description="Bridge IDE - Execute code and GitHub OAuth",
+    description="Bridge IDE - Execute code, GitHub OAuth, and AI project generation",
     version="1.0.0",
     debug=settings.DEBUG
 )
@@ -34,16 +34,21 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(code_router, prefix=settings.API_V1_STR)
-app.include_router(agent_routes.router, prefix=settings.API_V1_STR, tags=["agents"])
+app.include_router(agent_routes.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agents"])
 
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint - API information"""
     return {
         "message": f"Welcome to {settings.PROJECT_NAME}",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs",
+        "endpoints": {
+            "auth": "/api/auth",
+            "code": "/api/code",
+            "agents": "/api/agents"
+        }
     }
 
 
