@@ -5,10 +5,9 @@
       "runtime": "python3.11"
     }
   },
-  "builds": [
+   "builds": [
     {
       "src": "app/main.py",
-      "NODE_VERSION": "18.x",
       "use": "@vercel/python"
     }
   ],
