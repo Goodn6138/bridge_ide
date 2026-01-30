@@ -1,12 +1,3 @@
-import sys
-import typing
-
-if sys.version_info >= (3, 12, 4):
-    def patched_evaluate(self, globalns, localns=None, recursive_guard=frozenset()):
-        return self._evaluate(globalns, localns, recursive_guard)  # forward to original with kwarg
-
-    typing.ForwardRef._evaluate = patched_evaluate
-
 from langgraph.graph import StateGraph, END
 from app.graph.state import ProjectState
 from app.agents.classifier import classifier_agent

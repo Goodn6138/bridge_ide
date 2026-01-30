@@ -3,8 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.core.config import get_settings
 from app.api import auth_router, code_router, agent_routes
-import sys
-import typing
 
 # Configure logging
 logging.basicConfig(
@@ -22,15 +20,6 @@ app = FastAPI(
     version="1.0.0",
     debug=settings.DEBUG
 )
-
-# Patch ForwardRef._evaluate to be compatible with Python >=3.12.4
-if sys.version_info >= (3, 12, 4):
-    original_evaluate = typing.ForwardRef._evaluate
-
-    def patched_evaluate(self, globalns, localns, recursive_guard=frozenset()):
-        return original_evaluate(self, globalns, localns, recursive_guard=recursive_guard)
-
-    typing.ForwardRef._evaluate = patched_evaluate
 
 # CORS middleware
 app.add_middleware(
