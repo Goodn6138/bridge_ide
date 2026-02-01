@@ -207,6 +207,12 @@ def generate_fallback_files(file_list: List[str], design_spec: dict) -> Dict[str
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "axios": "^1.6.0"
+  },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "vite": "^5.0.8",
@@ -222,6 +228,15 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress unresolved import warnings - treat as external
+        if (warning.code === 'UNRESOLVED_IMPORT') return;
+        warn(warning);
+      }
+    }
+  }
 })
 """
     
@@ -319,3 +334,162 @@ export default {comp};
 """
     
     return files
+
+
+async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -> Dict[str, any]:
+    """
+    Build React app by writing files to disk and running npm locally.
+    
+    Args:
+        project_id: Internal project ID for tracking
+        app_id: Public app ID for preview naming
+        files: Dict of filename -> content for the React project
+    
+    Returns:
+        Dict with build_success, build_output, error_message, dist_url
+    """
+    import subprocess
+    import json
+    from pathlib import Path
+    import tarfile
+    import base64
+    
+    try:
+        print(f"📦 Building React app for {app_id}...")
+        
+        # Create project directory
+        project_dir = Path(f"./previews/{app_id}/build")
+        project_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write all files to disk
+        for filename, content in files.items():
+            filepath = project_dir / filename
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content)
+        
+        print(f"   ✓ Wrote {len(files)} files to {project_dir}")
+        
+        # Modify vite.config.js to include correct base path
+        vite_config_path = project_dir / "vite.config.js"
+        if vite_config_path.exists():
+            vite_content = vite_config_path.read_text()
+            # Inject base path into the config
+            base_path = f"/preview/{app_id}/dist/"
+            vite_content = vite_content.replace(
+                "export default defineConfig({",
+                f"export default defineConfig({{\n  base: '{base_path}',"
+            )
+            vite_config_path.write_text(vite_content)
+            print(f"   ✓ Set vite base path to {base_path}")
+
+        
+        # Run npm install
+        print(f"   → npm install...")
+        result = subprocess.run(
+            "npm install --legacy-peer-deps",
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            shell=True
+        )
+        
+        if result.returncode != 0:
+            error = result.stderr or result.stdout
+            print(f"   ❌ npm install failed: {error}")
+            return {
+                "build_success": False,
+                "build_output": result.stdout + result.stderr,
+                "error_message": f"npm install failed: {error}",
+                "dist_url": None
+            }
+        
+        print(f"   ✓ npm install complete")
+        
+        # Run npm build
+        print(f"   → npm run build...")
+        result = subprocess.run(
+            "npm run build",
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            shell=True
+        )
+        
+        if result.returncode != 0:
+            error = result.stderr or result.stdout
+            print(f"   ❌ npm run build failed: {error}")
+            return {
+                "build_success": False,
+                "build_output": result.stdout + result.stderr,
+                "error_message": f"npm build failed: {error}",
+                "dist_url": None
+            }
+        
+        print(f"   ✓ npm build complete")
+        
+        # Check if dist directory exists
+        dist_dir = project_dir / "dist"
+        if not dist_dir.exists():
+            return {
+                "build_success": False,
+                "error_message": "Build completed but dist/ directory not found",
+                "build_output": result.stdout,
+                "dist_url": None
+            }
+        
+        # Create tar.gz of dist
+        print(f"   → Creating dist.tar.gz...")
+        tar_path = Path(f"./previews/{app_id}/dist.tar.gz")
+        
+        with tarfile.open(tar_path, "w:gz") as tar:
+            tar.add(dist_dir, arcname="dist")
+        
+        print(f"   ✓ Created {tar_path}")
+        
+        # Move dist to preview directory (for serving)
+        import shutil
+        preview_dist = Path(f"./previews/{app_id}/dist")
+        if preview_dist.exists():
+            shutil.rmtree(preview_dist)
+        shutil.move(str(dist_dir), str(preview_dist))
+        
+        # Cleanup build artifacts
+        shutil.rmtree(project_dir)
+        
+        print(f"✅ Build successful for {app_id}")
+        
+        return {
+            "build_success": True,
+            "build_output": result.stdout,
+            "error_message": None,
+            "dist_url": f"/preview/{app_id}/dist/index.html"
+        }
+    
+    except subprocess.TimeoutExpired:
+        print(f"❌ Build timeout (exceeded 120s)")
+        return {
+            "build_success": False,
+            "build_output": "",
+            "error_message": "Build timeout - npm install or build took too long",
+            "dist_url": None
+        }
+    
+    except FileNotFoundError as e:
+        print(f"❌ npm not found: {e}")
+        return {
+            "build_success": False,
+            "build_output": str(e),
+            "error_message": "npm not installed on server",
+            "dist_url": None
+        }
+    
+    except Exception as e:
+        print(f"❌ Build error: {e}")
+        return {
+            "build_success": False,
+            "build_output": str(e),
+            "error_message": str(e),
+            "dist_url": None
+        }

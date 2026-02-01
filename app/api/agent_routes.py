@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import json
 import uuid
+from datetime import datetime, timedelta
 from app.graph.workflow import define_graph
 from app.models import GenerateRequest, RefineRequest, ExecuteRequest, ProjectState
 from langgraph.checkpoint.memory import MemorySaver
@@ -16,6 +17,11 @@ memory = MemorySaver()
 graph = define_graph()
 
 PROJECT_STATES: Dict[str, Dict[str, Any]] = {}
+
+# Export for cleanup service to access active projects
+projects = PROJECT_STATES
+PREVIEW_EXPIRE_HOURS = 24
+
 
 
 @router.post("/generate")
@@ -43,7 +49,9 @@ async def generate_project(request: GenerateRequest):
         "conversation_history": [],
         "iteration_count": 0,
         "current_files": {},
-        "user_feedback": None
+        "user_feedback": None,
+        "created_at": datetime.now(),
+        "expires_at": datetime.now() + timedelta(hours=PREVIEW_EXPIRE_HOURS)
     }
     
     PROJECT_STATES[project_id] = initial_state
@@ -67,9 +75,30 @@ async def generate_project(request: GenerateRequest):
             if value and isinstance(value, dict) and "current_files" in value:
                 yield f"event: files\ndata: {json.dumps({'files': value['current_files']})}\n\n"
 
-        # Final event
+        # Final state
         final_state = PROJECT_STATES[project_id]
-        yield f"event: complete\ndata: {json.dumps({'project_id': project_id, 'files': final_state.get('current_files')})}\n\n"
+        
+        # Attempt to build React app (optional - can be skipped for code-only projects)
+        if final_state.get("current_files"):
+            yield f"event: build\ndata: {json.dumps({'status': 'starting', 'message': 'Building React app...'})}\n\n"
+            
+            try:
+                from app.agents.code_generator import build_react_app
+                build_result = await build_react_app(project_id, project_id, final_state.get("current_files", {}))
+                
+                if build_result.get("build_success"):
+                    preview_url = build_result.get("dist_url")
+                    final_state["preview_url"] = preview_url
+                    
+                    yield f"event: build\ndata: {json.dumps({'status': 'success', 'preview_url': preview_url})}\n\n"
+                else:
+                    error = build_result.get("error_message", "Unknown build error")
+                    yield f"event: build\ndata: {json.dumps({'status': 'failed', 'error': error})}\n\n"
+            except Exception as e:
+                # Build failure doesn't block completion - files are still generated
+                yield f"event: build\ndata: {json.dumps({'status': 'error', 'message': str(e)})}\n\n"
+        
+        yield f"event: complete\ndata: {json.dumps({'project_id': project_id, 'files': final_state.get('current_files'), 'preview_url': final_state.get('preview_url')})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
