@@ -68,7 +68,7 @@ async def health_check():
 
 # Initialize previews directory and mount static file serving
 ensure_previews_dir()
-previews_path = Path("./previews").resolve()
+previews_path = Path("/tmp/previews").resolve()
 app.mount("/preview", StaticFiles(directory=previews_path), name="previews")
 
 

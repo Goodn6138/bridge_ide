@@ -357,8 +357,8 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
     try:
         print(f"📦 Building React app for {app_id}...")
         
-        # Create project directory
-        project_dir = Path(f"./previews/{app_id}/build")
+        # Create project directory (use /tmp for Vercel serverless)
+        project_dir = Path(f"/tmp/previews/{app_id}/build")
         project_dir.mkdir(parents=True, exist_ok=True)
         
         # Write all files to disk
@@ -441,7 +441,7 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
         
         # Create tar.gz of dist
         print(f"   → Creating dist.tar.gz...")
-        tar_path = Path(f"./previews/{app_id}/dist.tar.gz")
+        tar_path = Path(f"/tmp/previews/{app_id}/dist.tar.gz")
         
         with tarfile.open(tar_path, "w:gz") as tar:
             tar.add(dist_dir, arcname="dist")
@@ -450,7 +450,7 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
         
         # Move dist to preview directory (for serving)
         import shutil
-        preview_dist = Path(f"./previews/{app_id}/dist")
+        preview_dist = Path(f"/tmp/previews/{app_id}/dist")
         if preview_dist.exists():
             shutil.rmtree(preview_dist)
         shutil.move(str(dist_dir), str(preview_dist))

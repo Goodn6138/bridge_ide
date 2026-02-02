@@ -12,7 +12,8 @@ from typing import List, Dict
 
 logger = logging.getLogger(__name__)
 
-PREVIEWS_DIR = Path("./previews")
+# Use /tmp for serverless (Vercel) - filesystem is ephemeral
+PREVIEWS_DIR = Path("/tmp/previews")
 
 
 def ensure_previews_dir():

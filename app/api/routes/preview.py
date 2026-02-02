@@ -20,7 +20,8 @@ from app.services.cleanup import (
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-PREVIEWS_DIR = Path("./previews")
+# Use /tmp for serverless (Vercel) - filesystem is ephemeral
+PREVIEWS_DIR = Path("/tmp/previews")
 
 
 @router.post("/api/preview/upload/{app_id}")
