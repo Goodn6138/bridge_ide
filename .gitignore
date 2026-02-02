@@ -12,4 +12,6 @@ TestResults.xml
 venv
 .venv
 .env
-.env.example
+.vercel
+*zip
+previews

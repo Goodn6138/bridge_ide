@@ -231,6 +231,12 @@ def generate_fallback_files(file_list: List[str], design_spec: dict) -> Dict[str
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "axios": "^1.6.0"
+  },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "vite": "^5.0.8",
@@ -246,6 +252,15 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress unresolved import warnings - treat as external
+        if (warning.code === 'UNRESOLVED_IMPORT') return;
+        warn(warning);
+      }
+    }
+  }
 })
 """
     
@@ -346,3 +361,325 @@ export default {comp};
 """
     
     return files
+
+
+async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -> Dict[str, any]:
+    """
+    Build React app by writing files to disk and running npm locally.
+    On Vercel, npm is not available at runtime - gracefully degrades to StackBlitz preview.
+    
+    Args:
+        project_id: Internal project ID for tracking
+        app_id: Public app ID for preview naming
+        files: Dict of filename -> content for the React project
+    
+    Returns:
+        Dict with build_success, dist_url/preview_url, error_message
+    """
+    import subprocess
+    from pathlib import Path
+    import shutil
+    
+    try:
+        print(f"📦 Building React app for {app_id}...")
+        
+        # Check if npm is available
+        npm_available = False
+        try:
+            result = subprocess.run(
+                "npm --version",
+                capture_output=True,
+                text=True,
+                timeout=5,
+                shell=True
+            )
+            npm_available = result.returncode == 0
+        except Exception:
+            npm_available = False
+        
+        if not npm_available:
+            # npm not available (Vercel production) - save files for StackBlitz preview
+            print(f"   ⚠️ npm not available (Vercel serverless) - saving files for StackBlitz preview")
+            
+            # Save files to a temporary location so they can be served
+            preview_dir = Path(f"/tmp/previews/{app_id}/stackblitz")
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            
+            for filename, content in files.items():
+                filepath = preview_dir / filename
+                filepath.parent.mkdir(parents=True, exist_ok=True)
+                filepath.write_text(content)
+            
+            # Return a URL to the StackBlitz preview page that will be served by preview route
+            return {
+                "build_success": True,
+                "build_output": "Using StackBlitz preview (npm not available in serverless)",
+                "error_message": None,
+                "dist_url": f"/api/preview/stackblitz/{app_id}",
+                "preview_method": "stackblitz"
+            }
+        
+        # npm is available - proceed with local build
+        
+        # Create project directory (use /tmp for Vercel serverless)
+        project_dir = Path(f"/tmp/previews/{app_id}/build")
+        project_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Write all files to disk
+        for filename, content in files.items():
+            filepath = project_dir / filename
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            filepath.write_text(content)
+        
+        print(f"   ✓ Wrote {len(files)} files to {project_dir}")
+        
+        # Modify vite.config.js to include correct base path
+        vite_config_path = project_dir / "vite.config.js"
+        if vite_config_path.exists():
+            vite_content = vite_config_path.read_text()
+            # Inject base path into the config
+            base_path = f"/preview/{app_id}/dist/"
+            vite_content = vite_content.replace(
+                "export default defineConfig({",
+                f"export default defineConfig({{\n  base: '{base_path}',"
+            )
+            vite_config_path.write_text(vite_content)
+            print(f"   ✓ Set vite base path to {base_path}")
+
+        
+        # Run npm install
+        print(f"   → npm install...")
+        result = subprocess.run(
+            "npm install --legacy-peer-deps",
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            shell=True
+        )
+        
+        if result.returncode != 0:
+            error = result.stderr or result.stdout
+            print(f"   ❌ npm install failed: {error}")
+            return {
+                "build_success": False,
+                "build_output": result.stdout + result.stderr,
+                "error_message": f"npm install failed: {error}",
+                "dist_url": None
+            }
+        
+        print(f"   ✓ npm install complete")
+        
+        # Run npm build
+        print(f"   → npm run build...")
+        result = subprocess.run(
+            "npm run build",
+            cwd=str(project_dir),
+            capture_output=True,
+            text=True,
+            timeout=120,
+            shell=True
+        )
+        
+        if result.returncode != 0:
+            error = result.stderr or result.stdout
+            print(f"   ❌ npm run build failed: {error}")
+            return {
+                "build_success": False,
+                "build_output": result.stdout + result.stderr,
+                "error_message": f"npm build failed: {error}",
+                "dist_url": None
+            }
+        
+        print(f"   ✓ npm build complete")
+        
+        # Check if dist directory exists
+        dist_dir = project_dir / "dist"
+        if not dist_dir.exists():
+            return {
+                "build_success": False,
+                "error_message": "Build completed but dist/ directory not found",
+                "build_output": result.stdout,
+                "dist_url": None
+            }
+        
+        # Move dist to preview directory (for serving)
+        preview_dist = Path(f"/tmp/previews/{app_id}/dist")
+        if preview_dist.exists():
+            shutil.rmtree(preview_dist)
+        shutil.move(str(dist_dir), str(preview_dist))
+        
+        # Cleanup build artifacts
+        shutil.rmtree(project_dir)
+        
+        print(f"✅ Build successful for {app_id}")
+        
+        return {
+            "build_success": True,
+            "build_output": result.stdout,
+            "error_message": None,
+            "dist_url": f"/preview/{app_id}/dist/index.html",
+            "preview_method": "local"
+        }
+    
+    except subprocess.TimeoutExpired:
+        print(f"❌ Build timeout (exceeded 120s)")
+        return {
+            "build_success": False,
+            "build_output": "",
+            "error_message": "Build timeout - npm install or build took too long",
+            "dist_url": None
+        }
+    
+    except Exception as e:
+        print(f"❌ Build error: {e}")
+        return {
+            "build_success": False,
+            "build_output": str(e),
+            "error_message": str(e),
+            "dist_url": None
+        }
+
+
+def generate_stackblitz_url(app_id: str, files: Dict[str, str]) -> str:
+    """
+    Generate an HTML page that creates a StackBlitz project with auto-submit form.
+    StackBlitz doesn't allow direct URL-based project creation without a backend,
+    so we return HTML that posts the files to StackBlitz's API.
+    
+    Args:
+        app_id: Project ID
+        files: Generated file contents
+    
+    Returns:
+        HTML content with auto-submitting form to StackBlitz
+    """
+    import json
+    
+    # Prepare files for StackBlitz format
+    # StackBlitz expects files in format: "filename" -> "content"
+    stackblitz_files = {}
+    for filename, content in files.items():
+        stackblitz_files[filename] = content
+    
+    # Create the project data payload
+    project_data = {
+        "files": stackblitz_files,
+        "template": "node",
+        "title": f"Bridge IDE - {app_id}",
+        "description": "Generated React App Preview"
+    }
+    
+    # Generate HTML with auto-submitting form
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Opening Preview...</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                margin: 0;
+                background: #f5f5f5;
+            }}
+            .container {{
+                text-align: center;
+                background: white;
+                padding: 40px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }}
+            h1 {{
+                color: #333;
+                margin-bottom: 10px;
+            }}
+            p {{
+                color: #666;
+                margin: 10px 0;
+            }}
+            .spinner {{
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                margin: 20px auto;
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+            .button {{
+                background: #3498db;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 20px;
+            }}
+            .button:hover {{
+                background: #2980b9;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 Opening Preview...</h1>
+            <p>Creating your React app preview on StackBlitz</p>
+            <div class="spinner"></div>
+            <p>If the page doesn't open automatically, click the button below:</p>
+            <form id="stackblitz-form" method="post" action="https://stackblitz.com/api/v1/project" target="_blank">
+                <button type="submit" class="button">Open on StackBlitz</button>
+            </form>
+        </div>
+        
+        <script>
+            // Prepare the project data
+            const projectData = {json.dumps(project_data)};
+            
+            // Set form fields for each file
+            const form = document.getElementById('stackblitz-form');
+            
+            Object.entries(projectData.files).forEach(([filename, content]) => {{
+                const input = document.createElement('textarea');
+                input.name = 'files[' + filename + ']';
+                input.value = content;
+                form.appendChild(input);
+            }});
+            
+            // Add other project settings
+            const titleInput = document.createElement('input');
+            titleInput.type = 'hidden';
+            titleInput.name = 'title';
+            titleInput.value = projectData.title;
+            form.appendChild(titleInput);
+            
+            const templateInput = document.createElement('input');
+            templateInput.type = 'hidden';
+            templateInput.name = 'template';
+            templateInput.value = projectData.template;
+            form.appendChild(templateInput);
+            
+            const descInput = document.createElement('input');
+            descInput.type = 'hidden';
+            descInput.name = 'description';
+            descInput.value = projectData.description;
+            form.appendChild(descInput);
+            
+            // Auto-submit the form after a short delay
+            setTimeout(() => {{
+                form.submit();
+            }}, 500);
+        </script>
+    </body>
+    </html>
+    """
+    
+    return html_content
