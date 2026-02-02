@@ -18,8 +18,8 @@ async def main():
 
     print("--- Starting Verification ---")
     
-    # Test Prompt
-    prompt = "Create a modern landing page for a coffee shop with a hero section, a menu grid, and a contact form. Use a dark theme with orange accents."
+    # Test Prompt - Barbershop Landing Page
+    prompt = "Create me a barbershop landing page"
     print(f"Prompt: {prompt}")
     
     initial_state = {
