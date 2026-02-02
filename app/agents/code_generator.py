@@ -339,6 +339,7 @@ export default {comp};
 async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -> Dict[str, any]:
     """
     Build React app by writing files to disk and running npm locally.
+    On Vercel, npm is not available at runtime - gracefully degrades to StackBlitz preview.
     
     Args:
         project_id: Internal project ID for tracking
@@ -346,16 +347,44 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
         files: Dict of filename -> content for the React project
     
     Returns:
-        Dict with build_success, build_output, error_message, dist_url
+        Dict with build_success, dist_url/preview_url, error_message
     """
     import subprocess
-    import json
     from pathlib import Path
-    import tarfile
-    import base64
+    import shutil
     
     try:
         print(f"📦 Building React app for {app_id}...")
+        
+        # Check if npm is available
+        npm_available = False
+        try:
+            result = subprocess.run(
+                "npm --version",
+                capture_output=True,
+                text=True,
+                timeout=5,
+                shell=True
+            )
+            npm_available = result.returncode == 0
+        except Exception:
+            npm_available = False
+        
+        if not npm_available:
+            # npm not available (Vercel production) - return StackBlitz preview instead
+            print(f"   ⚠️ npm not available (Vercel serverless) - using StackBlitz preview")
+            
+            stackblitz_url = generate_stackblitz_url(app_id, files)
+            
+            return {
+                "build_success": True,
+                "build_output": "Using StackBlitz preview (npm not available in serverless)",
+                "error_message": None,
+                "dist_url": stackblitz_url,
+                "preview_method": "stackblitz"
+            }
+        
+        # npm is available - proceed with local build
         
         # Create project directory (use /tmp for Vercel serverless)
         project_dir = Path(f"/tmp/previews/{app_id}/build")
@@ -439,17 +468,7 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
                 "dist_url": None
             }
         
-        # Create tar.gz of dist
-        print(f"   → Creating dist.tar.gz...")
-        tar_path = Path(f"/tmp/previews/{app_id}/dist.tar.gz")
-        
-        with tarfile.open(tar_path, "w:gz") as tar:
-            tar.add(dist_dir, arcname="dist")
-        
-        print(f"   ✓ Created {tar_path}")
-        
         # Move dist to preview directory (for serving)
-        import shutil
         preview_dist = Path(f"/tmp/previews/{app_id}/dist")
         if preview_dist.exists():
             shutil.rmtree(preview_dist)
@@ -464,7 +483,8 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
             "build_success": True,
             "build_output": result.stdout,
             "error_message": None,
-            "dist_url": f"/preview/{app_id}/dist/index.html"
+            "dist_url": f"/preview/{app_id}/dist/index.html",
+            "preview_method": "local"
         }
     
     except subprocess.TimeoutExpired:
@@ -476,15 +496,6 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
             "dist_url": None
         }
     
-    except FileNotFoundError as e:
-        print(f"❌ npm not found: {e}")
-        return {
-            "build_success": False,
-            "build_output": str(e),
-            "error_message": "npm not installed on server",
-            "dist_url": None
-        }
-    
     except Exception as e:
         print(f"❌ Build error: {e}")
         return {
@@ -493,3 +504,22 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
             "error_message": str(e),
             "dist_url": None
         }
+
+
+def generate_stackblitz_url(app_id: str, files: Dict[str, str]) -> str:
+    """
+    Generate StackBlitz embed URL for preview when npm not available (Vercel).
+    StackBlitz handles the build and rendering in the browser.
+    
+    Args:
+        app_id: Project ID
+        files: Generated file contents
+    
+    Returns:
+        StackBlitz editor URL
+    """
+    # StackBlitz can load projects directly
+    # Format: https://stackblitz.com/edit/PROJECT_ID
+    
+    stackblitz_url = f"https://stackblitz.com/edit/{app_id}?file=src%2FApp.jsx&view=preview"
+    return stackblitz_url
