@@ -125,31 +125,55 @@ async def code_generator_agent(state: ProjectState):
     
     structured_llm = llm.with_structured_output(ProjectCode)
     
-    # ✅ FIXED: Escaped all { } that aren't template variables
-    system_prompt = """You are an Expert React Developer.
-    Generate the strictly working code for the requested project.
+    # ✅ MOBILE-FIRST: Enhanced prompt for phone IDE
+    system_prompt = """You are an Expert React Developer specializing in MOBILE-FIRST applications.
+    Generate strictly working code for a PHONE IDE environment.
     
-    Technology Stack: React, Tailwind CSS (via CDN or standard config), Vite (implied structure).
+    Technology Stack: React, Tailwind CSS, Vite
     
-    Requirements:
-    1. Output VALID code for every file.
-    2. Ensure NO placeholders.
-    3. Project Structure:
-       - `package.json`: keys "type": "module", dependencies: react, react-dom, vite, @vitejs/plugin-react, tailwindcss, autoprefixer, postcss.
-       - `vite.config.js`: use `export default defineConfig({{{{ plugins: [...] }}}})`.
-       - `postcss.config.js`: use `export default {{{{ plugins: {{{{ tailwindcss: {{}}, autoprefixer: {{}} }}}} }}}}` (ESM syntax).
-       - `tailwind.config.js`: use `export default {{{{ content: [...], theme: {{{{ extend: {{}} }}}}, plugins: [] }}}}` (ESM syntax).
-       - `index.html`: element with id="root", script type="module" src="/src/main.jsx".
-       - `src/index.css`: `@tailwind base; @tailwind components; @tailwind utilities;`.
+    CRITICAL MOBILE-FIRST REQUIREMENTS:
+    1. ALL components MUST use mobile-first Tailwind classes
+    2. Start with mobile layout (no prefix), then add md: and lg: breakpoints
+    3. Use responsive patterns:
+       - Typography: "text-sm md:text-base lg:text-lg"
+       - Spacing: "p-4 md:p-6 lg:p-8"
+       - Grid: "grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+       - Flex: "flex-col md:flex-row"
+    4. Touch-friendly sizing: buttons min-h-[44px], tap targets min 44px
+    5. Readable mobile text: minimum text-base (16px)
+    6. Full viewport: use "min-h-screen" for main containers
+    7. Mobile padding: use "px-4" or "container mx-auto px-4"
+    
+    Project Structure Requirements:
+    1. Output VALID, COMPLETE code for every file - NO placeholders
+    2. File specifications:
+       - `package.json`: "type": "module", dependencies: react, react-dom, vite, @vitejs/plugin-react, tailwindcss, autoprefixer, postcss
+       - `vite.config.js`: use `export default defineConfig({{{{ plugins: [...] }}}})``
+       - `postcss.config.js`: use `export default {{{{ plugins: {{{{ tailwindcss: {{}}, autoprefixer: {{}} }}}} }}}}` (ESM syntax)
+       - `tailwind.config.js`: use `export default {{{{ content: [...], theme: {{{{ extend: {{}} }}}}, plugins: [] }}}}` (ESM syntax)
+       - `index.html`: 
+         * MUST include: `<meta name="viewport" content="width=device-width, initial-scale=1.0">`
+         * Element with id="root"
+         * Script type="module" src="/src/main.jsx"
+       - `src/index.css`: `@tailwind base; @tailwind components; @tailwind utilities;`
        - `src/main.jsx`: 
-         - Must `import './index.css'` (or appropriate CSS path).
-         - Render App component to root.
-
+         * Must `import './index.css'`
+         * Render App component to root
+       - `src/App.jsx`:
+         * Use "min-h-screen" for full viewport
+         * Use "container mx-auto px-4" for mobile padding
+         * Mobile-first responsive layout
+    
+    COMPONENT STYLING RULES:
+    - Every component MUST use Tailwind classes
+    - Start mobile-first: "w-full md:w-1/2 lg:w-1/3"
+    - Responsive containers: "max-w-7xl mx-auto px-4"
+    - Touch-friendly: "py-3 px-6 min-h-[44px]" for buttons
+    - Proper spacing: "space-y-4 md:space-y-6"
+    
     Files to generate: {file_list}
     
-    Make sure components export correctly and import correctly.
-    Use Tailwind CSS classes for all styling.
-    Include proper imports and exports.
+    Ensure all components export correctly, import correctly, and use mobile-first responsive Tailwind patterns.
     """
     
     prompt_template = ChatPromptTemplate.from_messages([
@@ -306,8 +330,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 
 function App() {{
   return (
-    <div className="min-h-screen bg-gray-900">
-      <div className="container mx-auto py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="container mx-auto px-4 py-6 md:py-8 lg:py-12">
         {component_jsx}
       </div>
     </div>
@@ -317,15 +341,18 @@ function App() {{
 export default App;
 """
     
-    # Generate component files
+    # Generate component files with mobile-first styling
     for comp in components:
         files[f"src/components/{comp}.jsx"] = f"""import React from 'react';
 
 function {comp}() {{
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-      <h2 className="text-2xl font-bold text-orange-500 mb-4">{comp}</h2>
-      <p className="text-gray-300">This is the {comp} component.</p>
+    <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl shadow-2xl p-4 md:p-6 lg:p-8 mb-4 md:mb-6">
+      <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-400 mb-3 md:mb-4">{comp}</h2>
+      <p className="text-base md:text-lg text-gray-300 leading-relaxed">This is the {comp} component.</p>
+      <button className="mt-4 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-6 rounded-lg min-h-[44px] transition-colors duration-200">
+        Learn More
+      </button>
     </div>
   );
 }}

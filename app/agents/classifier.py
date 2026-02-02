@@ -96,14 +96,19 @@ async def classifier_agent(state: ProjectState):
     llm = get_llm(temperature=0)
     structured_llm = llm.with_structured_output(ClassificationOutput)
     
-    # Updated system prompt with explicit type instructions
+    # Updated system prompt with explicit type instructions and mobile-first enforcement
     system_prompt = """You are an expert software architect and project manager. 
     Analyze the incoming user prompt to determine the user's coding proficiency, project type, complexity, and specific requirements.
     
     CRITICAL: Return proper types:
     - requires_research: MUST be boolean true or false (NOT string "true" or "false")
-    - tech_stack: MUST be array of strings like ["react", "tailwind"]
+    - tech_stack: MUST be array of strings like ["react", "tailwind", "vite"]
     - extracted_requirements: MUST be array of strings
+    
+    MOBILE-FIRST REQUIREMENT:
+    ALL projects are being built for a PHONE IDE and MUST be mobile-first and responsive.
+    ALWAYS include "mobile-first responsive design" in extracted_requirements.
+    ALWAYS include ["react", "tailwind", "vite"] as the base tech_stack.
     
     The user wants to build a React application (unless specified otherwise). 
     If the request is vague or implies a lack of technical detail, classify as 'beginner'.
