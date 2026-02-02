@@ -371,16 +371,24 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
             npm_available = False
         
         if not npm_available:
-            # npm not available (Vercel production) - return StackBlitz preview instead
-            print(f"   ⚠️ npm not available (Vercel serverless) - using StackBlitz preview")
+            # npm not available (Vercel production) - save files for StackBlitz preview
+            print(f"   ⚠️ npm not available (Vercel serverless) - saving files for StackBlitz preview")
             
-            stackblitz_url = generate_stackblitz_url(app_id, files)
+            # Save files to a temporary location so they can be served
+            preview_dir = Path(f"/tmp/previews/{app_id}/stackblitz")
+            preview_dir.mkdir(parents=True, exist_ok=True)
             
+            for filename, content in files.items():
+                filepath = preview_dir / filename
+                filepath.parent.mkdir(parents=True, exist_ok=True)
+                filepath.write_text(content)
+            
+            # Return a URL to the StackBlitz preview page that will be served by preview route
             return {
                 "build_success": True,
                 "build_output": "Using StackBlitz preview (npm not available in serverless)",
                 "error_message": None,
-                "dist_url": stackblitz_url,
+                "dist_url": f"/api/preview/stackblitz/{app_id}",
                 "preview_method": "stackblitz"
             }
         
@@ -508,18 +516,143 @@ async def build_react_app(project_id: str, app_id: str, files: Dict[str, str]) -
 
 def generate_stackblitz_url(app_id: str, files: Dict[str, str]) -> str:
     """
-    Generate StackBlitz embed URL for preview when npm not available (Vercel).
-    StackBlitz handles the build and rendering in the browser.
+    Generate an HTML page that creates a StackBlitz project with auto-submit form.
+    StackBlitz doesn't allow direct URL-based project creation without a backend,
+    so we return HTML that posts the files to StackBlitz's API.
     
     Args:
         app_id: Project ID
         files: Generated file contents
     
     Returns:
-        StackBlitz editor URL
+        HTML content with auto-submitting form to StackBlitz
     """
-    # StackBlitz can load projects directly
-    # Format: https://stackblitz.com/edit/PROJECT_ID
+    import json
     
-    stackblitz_url = f"https://stackblitz.com/edit/{app_id}?file=src%2FApp.jsx&view=preview"
-    return stackblitz_url
+    # Prepare files for StackBlitz format
+    # StackBlitz expects files in format: "filename" -> "content"
+    stackblitz_files = {}
+    for filename, content in files.items():
+        stackblitz_files[filename] = content
+    
+    # Create the project data payload
+    project_data = {
+        "files": stackblitz_files,
+        "template": "node",
+        "title": f"Bridge IDE - {app_id}",
+        "description": "Generated React App Preview"
+    }
+    
+    # Generate HTML with auto-submitting form
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Opening Preview...</title>
+        <style>
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                margin: 0;
+                background: #f5f5f5;
+            }}
+            .container {{
+                text-align: center;
+                background: white;
+                padding: 40px;
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }}
+            h1 {{
+                color: #333;
+                margin-bottom: 10px;
+            }}
+            p {{
+                color: #666;
+                margin: 10px 0;
+            }}
+            .spinner {{
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #3498db;
+                border-radius: 50%;
+                width: 40px;
+                height: 40px;
+                animation: spin 1s linear infinite;
+                margin: 20px auto;
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+            .button {{
+                background: #3498db;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 20px;
+            }}
+            .button:hover {{
+                background: #2980b9;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 Opening Preview...</h1>
+            <p>Creating your React app preview on StackBlitz</p>
+            <div class="spinner"></div>
+            <p>If the page doesn't open automatically, click the button below:</p>
+            <form id="stackblitz-form" method="post" action="https://stackblitz.com/api/v1/project" target="_blank">
+                <button type="submit" class="button">Open on StackBlitz</button>
+            </form>
+        </div>
+        
+        <script>
+            // Prepare the project data
+            const projectData = {json.dumps(project_data)};
+            
+            // Set form fields for each file
+            const form = document.getElementById('stackblitz-form');
+            
+            Object.entries(projectData.files).forEach(([filename, content]) => {{
+                const input = document.createElement('textarea');
+                input.name = 'files[' + filename + ']';
+                input.value = content;
+                form.appendChild(input);
+            }});
+            
+            // Add other project settings
+            const titleInput = document.createElement('input');
+            titleInput.type = 'hidden';
+            titleInput.name = 'title';
+            titleInput.value = projectData.title;
+            form.appendChild(titleInput);
+            
+            const templateInput = document.createElement('input');
+            templateInput.type = 'hidden';
+            templateInput.name = 'template';
+            templateInput.value = projectData.template;
+            form.appendChild(templateInput);
+            
+            const descInput = document.createElement('input');
+            descInput.type = 'hidden';
+            descInput.name = 'description';
+            descInput.value = projectData.description;
+            form.appendChild(descInput);
+            
+            // Auto-submit the form after a short delay
+            setTimeout(() => {{
+                form.submit();
+            }}, 500);
+        </script>
+    </body>
+    </html>
+    """
+    
+    return html_content
