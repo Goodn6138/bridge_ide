@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bridge-ide"
+version = "1.0.0"
+description = "Bridge IDE - Execute code, GitHub OAuth, and AI project generation"
+requires-python = ">=3.10"
+
+[project.scripts]
+app = "app.main:app"
