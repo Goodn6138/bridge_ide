@@ -11,7 +11,8 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 pytest-httpx==0.26.0
 requests==2.31.0
-langgraph>=0.0.10
-langchain>=0.1.0
-langchain-groq>=0.0.1
+langgraph>=0.1.0
+langchain>=0.1.15
+langchain-groq>=0.1.0
+langchain-core>=0.1.0
 APScheduler>=3.10.0
