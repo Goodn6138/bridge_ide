@@ -85,7 +85,8 @@
 
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
+
 from typing import List, Dict
 from app.services.llm import get_llm
 from app.graph.state import ProjectState
@@ -119,17 +120,20 @@ async def code_generator_agent(state: ProjectState):
             # It's a list of objects - use .filename
             file_list = [f.filename for f in file_structure]
         
-    llm = get_llm(temperature=0.1) # Low temp for code
+    # Use deterministic output for structured code generation
+    llm = get_llm(temperature=0.0) # Deterministic for structured JSON
     # context window management: if too many files, might need multiple calls.
     # For now, we attempt single pass for typical "demo" size apps.
     
-    structured_llm = llm.with_structured_output(ProjectCode)
+    # Use json_schema to avoid Groq function/tool calling behavior for structured output
+    structured_llm = llm.with_structured_output(ProjectCode, method="json_schema")
     
     # ✅ MOBILE-FIRST: Enhanced prompt for phone IDE
-    system_prompt = """You are an Expert React Developer specializing in MOBILE-FIRST applications.
+    system_prompt = """IMPORTANT: Return a single JSON object strictly conforming to the ProjectCode schema. No extra commentary or explanation — only JSON.
+    You are an Expert React Developer specializing in MOBILE-FIRST applications.
     Generate strictly working code for a PHONE IDE environment.
     
-    Technology Stack: React, Tailwind CSS, Vite
+    Technology Stack: React, Tailwind CSS, Vite"
     
     CRITICAL MOBILE-FIRST REQUIREMENTS:
     1. ALL components MUST use mobile-first Tailwind classes
@@ -204,19 +208,22 @@ async def code_generator_agent(state: ProjectState):
     
     except Exception as e:
         print(f"❌ Code generation error: {e}")
-        print(f"   Attempting fallback generation...")
+        print(f"   Attempting fallback generation using design_spec...")
         
-        # Fallback: generate basic structure
+        # Fallback: generate basic structure (prefer design_spec file_structure when available)
         fallback_files = generate_fallback_files(file_list, design_spec)
+        print(f"   Fallback produced {len(fallback_files)} files: {sorted(list(fallback_files.keys()))[:10]}{'...' if len(fallback_files)>10 else ''}")
         return {"current_files": fallback_files}
 
 
 def generate_fallback_files(file_list: List[str], design_spec: dict) -> Dict[str, str]:
-    """Generate basic fallback files if LLM fails"""
-    
+    """Generate basic fallback files if LLM fails. Use design_spec.file_structure when available."""
+
+    import os
+
     files = {}
-    
-    # package.json
+
+    # base defaults (ensure minimal working project)
     files["package.json"] = """{
   "name": "generated-react-app",
   "private": true,
@@ -231,12 +238,6 @@ def generate_fallback_files(file_list: List[str], design_spec: dict) -> Dict[str
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0",
-    "axios": "^1.6.0"
-  },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "vite": "^5.0.8",
@@ -245,8 +246,7 @@ def generate_fallback_files(file_list: List[str], design_spec: dict) -> Dict[str
     "postcss": "^8.4.32"
   }
 }"""
-    
-    # vite.config.js
+
     files["vite.config.js"] = """import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -255,7 +255,6 @@ export default defineConfig({
   build: {
     rollupOptions: {
       onwarn(warning, warn) {
-        // Suppress unresolved import warnings - treat as external
         if (warning.code === 'UNRESOLVED_IMPORT') return;
         warn(warning);
       }
@@ -263,8 +262,7 @@ export default defineConfig({
   }
 })
 """
-    
-    # tailwind.config.js
+
     files["tailwind.config.js"] = """export default {
   content: [
     "./index.html",
@@ -276,8 +274,7 @@ export default defineConfig({
   plugins: [],
 }
 """
-    
-    # postcss.config.js
+
     files["postcss.config.js"] = """export default {
   plugins: {
     tailwindcss: {},
@@ -285,14 +282,12 @@ export default defineConfig({
   },
 }
 """
-    
-    # src/index.css
+
     files["src/index.css"] = """@tailwind base;
 @tailwind components;
 @tailwind utilities;
 """
-    
-    # index.html
+
     files["index.html"] = """<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -306,8 +301,7 @@ export default defineConfig({
   </body>
 </html>
 """
-    
-    # src/main.jsx
+
     files["src/main.jsx"] = """import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
@@ -319,47 +313,123 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 """
-    
-    # src/App.jsx
-    components = design_spec.get('components', ['Main']) if design_spec else ['Main']
-    component_imports = '\n'.join([f"import {comp} from './components/{comp}.jsx';" for comp in components])
-    component_jsx = '\n      '.join([f"<{comp} />" for comp in components])
-    
-    files["src/App.jsx"] = f"""import React from 'react';
-{component_imports}
 
-function App() {{
+    # If design_spec provides a file_structure, use it to generate more accurate fallbacks
+    components = []
+    file_structure = []
+    if design_spec and isinstance(design_spec, dict):
+        file_structure = design_spec.get('file_structure') or design_spec.get('files') or []
+
+    if file_structure and isinstance(file_structure, list):
+        for entry in file_structure:
+            # entry may be a dict (from DesignSpec) or an object with filename attribute
+            if isinstance(entry, dict):
+                fname = entry.get('filename') or entry.get('path')
+                desc = entry.get('description', '')
+            else:
+                fname = getattr(entry, 'filename', None)
+                desc = ''
+            if not fname:
+                continue
+            # Normalize Windows backslashes to forward slashes
+            fname = fname.replace('\\', '/').lstrip('/')
+
+            # Components
+            if fname.endswith('.jsx') or fname.endswith('.js'):
+                # components under src/components
+                if fname.startswith('src/components/'):
+                    compname = os.path.splitext(os.path.basename(fname))[0]
+                    components.append(compname)
+                    files[fname] = f"""import React from 'react';
+
+function {compname}() {{
+  return (
+    <div className=\"bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl shadow-2xl p-4 md:p-6 lg:p-8 mb-4 md:mb-6\">\n      <h2 className=\"text-xl md:text-2xl lg:text-3xl font-bold text-orange-400 mb-3 md:mb-4\">{compname}</h2>\n      <p className=\"text-base md:text-lg text-gray-300 leading-relaxed\">{desc or f'This is the {compname} component.'}</p>\n      <button className=\"mt-4 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-6 rounded-lg min-h-[44px] transition-colors duration-200\">\n        Learn More\n      </button>\n    </div>\n  );\n}}\n\nexport default {compname};\n"""
+                elif fname.startswith('src/data/') or '/data/' in fname:
+                    files[fname] = 'export default []'
+                else:
+                    # Generic JS/JSX placeholder
+                    base = os.path.splitext(os.path.basename(fname))[0]
+                    files[fname] = f"// Placeholder for {fname}\n\nexport default function {base}() {{\n  return null\n}}\n"
+
+            elif fname.endswith('.html'):
+                files[fname] = """<!DOCTYPE html>
+<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Generated</title>\n</head>\n<body>\n  <div id=\"root\"></div>\n  <script type=\"module\" src=\"/src/main.jsx\"></script>\n</body>\n</html>"""
+
+            elif fname.endswith('.css'):
+                files[fname] = "@tailwind base;\n@tailwind components;\n@tailwind utilities;"
+
+            elif os.path.basename(fname) == 'package.json' or fname.endswith('package.json'):
+                # Generate a valid package.json to allow npm install
+                import json as _json
+                pkg = {
+                    "name": "generated-react-app",
+                    "private": True,
+                    "version": "0.0.1",
+                    "type": "module",
+                    "scripts": {
+                        "dev": "vite",
+                        "build": "vite build",
+                        "preview": "vite preview"
+                    },
+                    "dependencies": {
+                        "react": "^18.2.0",
+                        "react-dom": "^18.2.0"
+                    },
+                    "devDependencies": {
+                        "@vitejs/plugin-react": "^4.2.1",
+                        "vite": "^5.0.8",
+                        "tailwindcss": "^3.3.6",
+                        "autoprefixer": "^10.4.16",
+                        "postcss": "^8.4.32"
+                    }
+                }
+                files[fname] = _json.dumps(pkg, indent=2)
+
+            else:
+                files[fname] = f"// Placeholder for {fname}\n"
+
+    # Build a sensible App.jsx using discovered components (or fallback to 'Main')
+    if components:
+        component_imports = '\n'.join([f"import {comp} from './components/{comp}.jsx';" for comp in components])
+        component_jsx = '\n      '.join([f"<{comp} />" for comp in components])
+        files["src/App.jsx"] = f"import React from 'react';\n{component_imports}\n\nfunction App() {{\n  return (\n    <div className=\"min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900\">\n      <div className=\"container mx-auto px-4 py-6 md:py-8 lg:py-12\">\n        {component_jsx}\n      </div>\n    </div>\n  );\n}}\n\nexport default App;"
+    else:
+        # previous single Main fallback
+        components = ['Main']
+        files["src/App.jsx"] = """import React from 'react';
+import Main from './components/Main.jsx';
+
+function App() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="container mx-auto px-4 py-6 md:py-8 lg:py-12">
-        {component_jsx}
+        <Main />
       </div>
     </div>
   );
-}}
+}
 
 export default App;
 """
-    
-    # Generate component files with mobile-first styling
-    for comp in components:
-        files[f"src/components/{comp}.jsx"] = f"""import React from 'react';
 
-function {comp}() {{
+        files["src/components/Main.jsx"] = """import React from 'react';
+
+function Main() {
   return (
     <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl shadow-2xl p-4 md:p-6 lg:p-8 mb-4 md:mb-6">
-      <h2 className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-400 mb-3 md:mb-4">{comp}</h2>
-      <p className="text-base md:text-lg text-gray-300 leading-relaxed">This is the {comp} component.</p>
+      <h2 className="text-4xl md:text-5xl lg:text-6xl font-bold text-orange-400 mb-4">Main</h2>
+      <p className="text-lg md:text-xl text-gray-300 leading-relaxed">This is the Main component.</p>
       <button className="mt-4 bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-6 rounded-lg min-h-[44px] transition-colors duration-200">
         Learn More
       </button>
     </div>
   );
-}}
+}
 
-export default {comp};
+export default Main;
 """
-    
+
     return files
 
 

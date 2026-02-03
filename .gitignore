@@ -14,4 +14,5 @@ venv
 .env
 .vercel
 *zip
-previews
+previewsbridge_ide/Lib/
+bridge_ide/Lib/ 

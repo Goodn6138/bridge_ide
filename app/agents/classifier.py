@@ -51,7 +51,7 @@
 
 
 from typing import List, Literal, Optional
-from langchain_core.pydantic_v1 import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator
 from langchain_core.prompts import ChatPromptTemplate
 from app.services.llm import get_llm
 from app.graph.state import ProjectState
@@ -94,7 +94,8 @@ async def classifier_agent(state: ProjectState):
     prompt = state["original_prompt"]
     
     llm = get_llm(temperature=0)
-    structured_llm = llm.with_structured_output(ClassificationOutput)
+    # Use json_schema to avoid Groq function/tool calling behavior for structured output
+    structured_llm = llm.with_structured_output(ClassificationOutput, method="json_schema")
     
     # Updated system prompt with explicit type instructions and mobile-first enforcement
     system_prompt = """You are an expert software architect and project manager. 

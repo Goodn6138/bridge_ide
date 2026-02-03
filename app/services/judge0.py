@@ -22,6 +22,7 @@ LANGUAGE_ID_MAP = {
     "csharp": 51,
     "c#": 51,
     "ruby": 72,
+    "rb": 72,
     "go": 60,
     "rust": 73,
     "php": 68,
@@ -92,21 +93,21 @@ async def submit_code(
     
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.post(
+            response = await session.post(
                 f"{settings.JUDGE0_API_URL}/submissions",
                 json=code_data,
                 headers=headers,
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as response:
-                if response.status != 201:
-                    error_text = await response.text()
-                    logger.error(f"[Judge0] API error {response.status}: {error_text}")
-                    raise Exception(f"Judge0 API error: {response.status} - {error_text}")
-                
-                result = await response.json()
-                logger.info(f"[Judge0] Submission successful: token={result.get('token')}")
-                return result
+            )
+            if response.status != 201:
+                error_text = await response.text()
+                logger.error(f"[Judge0] API error {response.status}: {error_text}")
+                raise Exception(f"Judge0 API error: {response.status} - {error_text}")
+
+            result = await response.json()
+            logger.info(f"[Judge0] Submission successful: token={result.get('token')}")
+            return result
     except aiohttp.ClientError as e:
         logger.error(f"[Judge0] Connection error: {str(e)}")
         raise Exception(f"Judge0 connection error: {str(e)}")
