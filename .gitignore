@@ -16,3 +16,15 @@ venv
 *zip
 previewsbridge_ide/Lib/
 bridge_ide/Lib/ 
+bridge_ide/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+EOF
