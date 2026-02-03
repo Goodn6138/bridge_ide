@@ -5,16 +5,24 @@ from typing import Dict, Any, Optional
 import json
 import uuid
 from datetime import datetime, timedelta
-from app.graph.workflow import define_graph
 from app.models import GenerateRequest, RefineRequest, ExecuteRequest, ProjectState
-from langgraph.checkpoint.memory import MemorySaver
 
 router = APIRouter()
 
 # In-memory storage for thread configuration (MVP)
 # In production, use Postgres/Redis via LangGraph checkpointer
-memory = MemorySaver()
-graph = define_graph()
+memory = None
+graph = None
+
+def get_graph():
+    """Lazy load graph and memory to avoid import errors on startup."""
+    global memory, graph
+    if memory is None or graph is None:
+        from langgraph.checkpoint.memory import MemorySaver
+        from app.graph.workflow import define_graph as _define_graph
+        memory = MemorySaver()
+        graph = _define_graph()
+    return graph, memory
 
 PROJECT_STATES: Dict[str, Dict[str, Any]] = {}
 
@@ -60,7 +68,8 @@ async def generate_project(request: GenerateRequest):
         # Stream events
         yield f"event: init\ndata: {json.dumps({'project_id': project_id})}\n\n"
         
-        async for event in graph.astream(initial_state):
+        graph_instance, _ = get_graph()
+        async for event in graph_instance.astream(initial_state):
             # event is a dict of {node_name: state_update}
             for key, value in event.items():
                 if key != "__end__":
@@ -130,7 +139,8 @@ async def refine_project(request: RefineRequest):
         yield f"event: init\ndata: {json.dumps({'project_id': request.project_id})}\n\n"
         
         # We invoke graph again. The router will see user_feedback and go to refinement.
-        async for event in graph.astream(state):
+        graph_instance, _ = get_graph()
+        async for event in graph_instance.astream(state):
              for key, value in event.items():
                 if key != "__end__":
                     PROJECT_STATES[request.project_id].update(value)

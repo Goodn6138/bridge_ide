@@ -5,10 +5,9 @@ import logging
 from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.core.config import get_settings
-from app.api import auth_router, code_router, agent_routes
+from app.api import auth_router, code_router, get_agent_routes
 from app.api.routes import preview_router
 from app.services.cleanup import ensure_previews_dir, cleanup_expired_previews
-from app.api.agent_routes import projects  # Access active projects
 
 # Configure logging
 logging.basicConfig(
@@ -40,7 +39,16 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(code_router, prefix=settings.API_V1_STR)
-app.include_router(agent_routes.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agents"])
+
+# Lazy load agent routes to avoid import errors
+try:
+    agent_routes_module = get_agent_routes()
+    app.include_router(agent_routes_module.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agents"])
+    projects = agent_routes_module.projects  # Access active projects
+except Exception as e:
+    logger.warning(f"Failed to load agent routes: {e}")
+    projects = {}
+
 app.include_router(preview_router, tags=["preview"])
 
 
