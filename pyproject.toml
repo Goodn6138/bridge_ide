@@ -11,12 +11,9 @@ requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [{name = "Bridge IDE Team"}]
 keywords = ["fastapi", "github-oauth", "judge0", "code-execution"]
-<<<<<<< HEAD
-=======
 dependencies = [
     "uvicorn>=0.33.0",
 ]
->>>>>>> origin/navas
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,5 +1,6 @@
 """API routes module initialization"""
 from .auth import router as auth_router
 from .code import router as code_router
+from .preview import router as preview_router
 
-__all__ = ["auth_router", "code_router"]
+__all__ = ["auth_router", "code_router", "preview_router"]

@@ -1,6 +1,7 @@
 from typing import TypedDict, List, Dict, Optional, Any, Union
 from typing_extensions import Annotated
 import operator
+from datetime import datetime
 
 class ProjectState(TypedDict):
     """
@@ -15,6 +16,10 @@ class ProjectState(TypedDict):
     current_files: Dict[str, str]  # filename -> content
     user_feedback: Optional[str]
     iteration_count: int
+    
+    # Timestamps for preview expiration
+    created_at: datetime
+    expires_at: datetime
     
     # intermediate outputs
     classification: Optional[dict]
