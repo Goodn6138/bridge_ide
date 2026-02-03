@@ -1,5 +1,6 @@
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
+
 from typing import List, Dict
 from app.services.llm import get_llm
 from app.graph.state import ProjectState
@@ -24,7 +25,8 @@ async def design_agent(state: ProjectState):
     prompt = state["original_prompt"]
     
     llm = get_llm(temperature=0.2)
-    structured_llm = llm.with_structured_output(DesignSpec)
+    # Use json_schema method to avoid Groq function/tool calling behavior
+    structured_llm = llm.with_structured_output(DesignSpec, method="json_schema")
     
     system_prompt = """You are a Senior React Architect specializing in MOBILE-FIRST design.
     Based on the requirements and research, design a robust React application structure optimized for PHONE IDE.

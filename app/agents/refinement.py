@@ -15,7 +15,8 @@ async def refinement_agent(state: ProjectState):
         return {}
         
     llm = get_llm(temperature=0.1)
-    structured_llm = llm.with_structured_output(ProjectCode)
+    # Use json_schema to avoid Groq function/tool calling behavior for structured output
+    structured_llm = llm.with_structured_output(ProjectCode, method="json_schema")
     
     # We only want to enable editing specific files, but for simplicity we re-generate or update.
     # To save tokens, we could first ask what files need changing.

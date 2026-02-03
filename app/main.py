@@ -5,10 +5,18 @@ import logging
 from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.core.config import get_settings
+<<<<<<< HEAD
+<<<<<<< HEAD
+from app.api import auth_router, code_router
+=======
+from app.api import auth_router, code_router, agent_routes
+>>>>>>> origin/navas
+=======
 from app.api import auth_router, code_router, agent_routes
 from app.api.routes import preview_router
 from app.services.cleanup import ensure_previews_dir, cleanup_expired_previews
 from app.api.agent_routes import projects  # Access active projects
+>>>>>>> 074ca82793207f966b6c5dd08c33a373ce697731
 
 # Configure logging
 logging.basicConfig(
@@ -40,9 +48,16 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(code_router, prefix=settings.API_V1_STR)
+<<<<<<< HEAD
+<<<<<<< HEAD
+=======
+app.include_router(agent_routes.router, prefix=settings.API_V1_STR, tags=["agents"])
+>>>>>>> origin/navas
+=======
 app.include_router(agent_routes.router, prefix=f"{settings.API_V1_STR}/agents", tags=["agents"])
 app.include_router(preview_router, tags=["preview"])
 
+>>>>>>> 074ca82793207f966b6c5dd08c33a373ce697731
 
 
 @app.get("/")
