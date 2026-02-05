@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import RedirectResponse
 from app.models import GithubAuthRequest, AuthResponse
 from app.services.github_oauth import authenticate_github_user
 import logging
@@ -13,7 +14,7 @@ async def github_login():
     Redirect user to GitHub OAuth login page.
     
     Returns:
-        Redirect URL to GitHub OAuth authorization endpoint
+        HTTP redirect to GitHub OAuth authorization endpoint
     """
     from app.core.config import get_settings
     settings = get_settings()
@@ -26,7 +27,7 @@ async def github_login():
         f"&state=bridge-ide"
     )
     
-    return {"login_url": github_auth_url}
+    return RedirectResponse(url=github_auth_url)
 
 
 @router.post("/github/callback")
