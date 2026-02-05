@@ -3,7 +3,7 @@
 
 # settings = get_settings()
 
-# def get_llm(model_name: str = "llama-3.3-70b-versatile", temperature: float = 0.0):
+# def get_llm(model_name: str = "llama-3.3-70b-versatile", temperature: float = 0.0 , max_tokens = 100000):
 #     """
 #     Get an instance of ChatGroq.
     
@@ -30,7 +30,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-def get_llm(model_name: str = "openai/gpt-oss-20b", temperature: float = 0.0):
+def get_llm(model_name: str = "openai/gpt-oss-20b", temperature: float = 0.0  , max_tokens = 50000):
     """
     Get an instance of ChatGroq.
     
@@ -60,5 +60,6 @@ def get_llm(model_name: str = "openai/gpt-oss-20b", temperature: float = 0.0):
     return ChatGroq(
         model_name=model_name,
         temperature=temperature,
-        api_key=settings.GROQ_API_KEY
+        api_key=settings.GROQ_API_KEY,
+        max_tokens = max_tokens
     )
