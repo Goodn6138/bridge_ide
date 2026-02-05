@@ -100,7 +100,8 @@ async def submit_code(
                 params=params,
                 timeout=aiohttp.ClientTimeout(total=timeout)
             )
-            if response.status != 201:
+            # Accept both 200 (when wait=true) and 201 (when wait=false) status codes
+            if response.status not in (200, 201):
                 error_text = await response.text()
                 logger.error(f"[Judge0] API error {response.status}: {error_text}")
                 raise Exception(f"Judge0 API error: {response.status} - {error_text}")
