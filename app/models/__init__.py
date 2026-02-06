@@ -50,14 +50,14 @@ class AuthResponse(BaseModel):
 class GenerateRequest(BaseModel):
     """Request to generate a new project from prompt"""
     prompt: str
-    user_id: str
+    user_id: any
 
 
 class RefineRequest(BaseModel):
     """Request to refine an existing project"""
     project_id: str
     feedback: str
-    user_id: str
+    user_id: any
 
 
 class ExecuteRequest(BaseModel):
@@ -75,7 +75,7 @@ class ConversationMessage(BaseModel):
 class ProjectState(BaseModel):
     """Complete state of a project"""
     project_id: Optional[str] = None
-    user_id: str
+    user_id: any
     original_prompt: str
     iteration_count: int = 0
     conversation_history: List[ConversationMessage] = []
